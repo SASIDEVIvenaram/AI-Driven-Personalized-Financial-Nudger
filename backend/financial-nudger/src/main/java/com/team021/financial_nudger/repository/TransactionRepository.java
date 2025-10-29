@@ -25,6 +25,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
     List<Transaction> findByUserIdAndIsUserCategorized(Integer userId, Boolean isUserCategorized);
     
     List<Transaction> findByCategoryIdIsNullAndUserId(Integer userId);
+
+    // Fetch by category without scoping to user (use carefully; prefer user-scoped in controllers)
+    List<Transaction> findByCategoryId(Integer categoryId);
     
     @Query("SELECT t FROM Transaction t WHERE t.userId = :userId AND t.categoryId IS NULL")
     List<Transaction> findUncategorizedTransactionsByUserId(@Param("userId") Integer userId);
