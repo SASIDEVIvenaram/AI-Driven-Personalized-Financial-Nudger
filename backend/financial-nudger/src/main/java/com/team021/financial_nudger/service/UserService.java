@@ -2,6 +2,7 @@ package com.team021.financial_nudger.service;
 
 import java.util.List;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,20 +16,26 @@ import com.team021.financial_nudger.repository.UserRepository;
 public class UserService {
 
   private final UserRepository userRepository;
-
-  public UserService(UserRepository userRepository) { this.userRepository = userRepository; }
+  private final PasswordEncoder passwordEncoder;
+  public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    this.userRepository = userRepository;
+    this.passwordEncoder = passwordEncoder;
+  }
 
   @Transactional
   public UserResponse create(UserCreateRequest req) {
     if (userRepository.existsByEmail(req.getEmail())) {
       throw new IllegalArgumentException("Email already exists");
     }
+
+    // Hashing the raw password from the DTO
+    String hashedPassword = passwordEncoder.encode(req.getPassword());
+
     User user = new User(
-        req.getEmail(),
-        req.getPasswordHash(),
-        req.getSalt(),
-        req.getFirstName(),
-        req.getLastName()
+            req.getEmail(),
+            hashedPassword,
+            req.getFirstName(),
+            req.getLastName()
     );
     user.setCurrencyPreference(req.getCurrencyPreference());
     return toResponse(userRepository.save(user));
@@ -37,7 +44,7 @@ public class UserService {
   @Transactional(readOnly = true)
   public UserResponse getById(Integer id) {
     User user = userRepository.findById(id)
-        .orElseThrow(() -> new NotFoundException("User not found: " + id));
+            .orElseThrow(() -> new NotFoundException("User not found: " + id));
     return toResponse(user);
   }
 
@@ -49,15 +56,15 @@ public class UserService {
   @Transactional
   public UserResponse update(Integer id, UserCreateRequest req) {
     User user = userRepository.findById(id)
-        .orElseThrow(() -> new NotFoundException("User not found: " + id));
+            .orElseThrow(() -> new NotFoundException("User not found: " + id));
     user.setFirstName(req.getFirstName());
     user.setLastName(req.getLastName());
     user.setCurrencyPreference(req.getCurrencyPreference());
-    if (req.getPasswordHash() != null && !req.getPasswordHash().isBlank()) {
-      user.setPasswordHash(req.getPasswordHash());
-    }
-    if (req.getSalt() != null && !req.getSalt().isBlank()) {
-      user.setSalt(req.getSalt());
+
+    // Check if a new password was provided and hash it if so
+    if (req.getPassword() != null && !req.getPassword().isBlank()) {
+      user.setPasswordHash(passwordEncoder.encode(req.getPassword()));
+
     }
     return toResponse(userRepository.save(user));
   }
@@ -70,11 +77,11 @@ public class UserService {
 
   private UserResponse toResponse(User u) {
     return UserResponse.builder()
-        .userId(u.getUserId())
-        .email(u.getEmail())
-        .firstName(u.getFirstName())
-        .lastName(u.getLastName())
-        .currencyPreference(u.getCurrencyPreference())
-        .build();
+            .userId(u.getUserId())
+            .email(u.getEmail())
+            .firstName(u.getFirstName())
+            .lastName(u.getLastName())
+            .currencyPreference(u.getCurrencyPreference())
+            .build();
   }
 }

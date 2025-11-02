@@ -29,10 +29,6 @@ public class User {
     @Column(name="password_hash",nullable = false,length = 255)
     private String passwordHash;
 
-    @NotBlank(message = "Salt is required")
-    @Column(nullable = false,length=255)
-    private String salt;
-
     @NotBlank(message = "First name is required")
     @Size(max=100,message = "First name must not exceed 100 characters")
     @Column(name = "first_name",nullable = false,length = 100)
@@ -54,10 +50,9 @@ public class User {
     // Constructors
     public User() {}
     
-    public User(String email, String passwordHash, String salt, String firstName, String lastName) {
+    public User(String email, String passwordHash, String firstName, String lastName) {
         this.email = email;
         this.passwordHash = passwordHash;
-        this.salt = salt;
         this.firstName = firstName;
         this.lastName = lastName;
     }
@@ -84,14 +79,6 @@ public class User {
 
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
-    }
-
-    public String getSalt() {
-        return salt;
-    }
-
-    public void setSalt(String salt) {
-        this.salt = salt;
     }
 
     public String getFirstName() {

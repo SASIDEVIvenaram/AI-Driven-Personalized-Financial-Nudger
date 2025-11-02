@@ -14,10 +14,8 @@ public class UserCreateRequest {
   private String email;
 
   @NotBlank
-  private String passwordHash;
-
-  @NotBlank
-  private String salt;
+  @Size(min = 8, max = 100, message = "Password must be between 8 and 100 characters")
+  private String password;
 
   @NotBlank @Size(max = 100)
   private String firstName;

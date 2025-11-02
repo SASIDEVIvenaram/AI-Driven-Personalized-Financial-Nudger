@@ -40,7 +40,12 @@ public class IngestedFile {
     @NotNull(message = "File size is required")
     @Column(name = "file_size", nullable = false)
     private Long fileSize;
-    
+
+    @NotBlank(message = "MIME type is required")
+    @Size(max = 128, message = "MIME type must not exceed 128 characters")
+    @Column(name = "mime_type", nullable = false, length = 128)
+    private String mimeType;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "upload_status", nullable = false)
     private UploadStatus uploadStatus = UploadStatus.PENDING;
@@ -145,7 +150,14 @@ public class IngestedFile {
     public void setProcessedAt(Instant processedAt) {
         this.processedAt = processedAt;
     }
-    
+
+    public String getMimeType() {
+        return mimeType;
+    }
+
+    public void setMimeType(String mimeType) {
+        this.mimeType = mimeType;
+    }
     @Override
     public String toString() {
         return "IngestedFile{" +

@@ -23,23 +23,6 @@ public class FileUploadController {
         this.fileUploadService = fileUploadService;
     }
 
-    @PostMapping("/upload-csv")
-    public ResponseEntity<FileUploadResponse> uploadCsv(
-            @RequestParam("file") @NotNull MultipartFile file,
-            @RequestParam("userId") @NotNull Integer userId) {
-        
-        try {
-            FileUploadResponse response = fileUploadService.processCsvFile(file, userId);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                .body(FileUploadResponse.builder()
-                    .success(false)
-                    .message("Error processing CSV: " + e.getMessage())
-                    .build());
-        }
-    }
-
     @PostMapping("/upload-receipt")
     public ResponseEntity<FileUploadResponse> uploadReceipt(
             @RequestParam("file") @NotNull MultipartFile file,
