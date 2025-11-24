@@ -61,7 +61,9 @@ public class IngestedFile {
     
     // Enums
     public enum FileType {
-        CSV, RECEIPT, MANUAL
+        RECEIPT,
+        STATEMENT,
+        MANUAL
     }
     
     public enum UploadStatus {

@@ -1,15 +1,16 @@
 package com.team021.financial_nudger.service;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
 import com.team021.financial_nudger.domain.Category;
 import com.team021.financial_nudger.dto.CategoryCreateRequest;
 import com.team021.financial_nudger.dto.CategoryResponse;
 import com.team021.financial_nudger.exception.ResourceAlreadyExistsException;
 import com.team021.financial_nudger.exception.ResourceNotFoundException;
 import com.team021.financial_nudger.repository.CategoryRepository;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class CategoryService {
@@ -106,5 +107,14 @@ public class CategoryService {
                 category.getCategoryType(),
                 category.getIsUserDefined()
         );
+    }
+
+    public String getCategoryNameById(Integer categoryId) {
+        if (categoryId == null) {
+            return "Uncategorized";
+        }
+        return categoryRepository.findById(categoryId)
+                .map(Category::getCategoryName)
+                .orElse("Unknown");
     }
 }

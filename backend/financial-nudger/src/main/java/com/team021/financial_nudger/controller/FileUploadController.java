@@ -39,4 +39,20 @@ public class FileUploadController {
                     .build());
         }
     }
+
+    @PostMapping("/upload-statement")
+    public ResponseEntity<FileUploadResponse> uploadStatement(
+            @RequestParam("file") @NotNull MultipartFile file,
+            @RequestParam("userId") @NotNull Integer userId) {
+        try {
+            FileUploadResponse response = fileUploadService.processPdfFile(file, userId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(FileUploadResponse.builder()
+                            .success(false)
+                            .message("Error processing bank statement: " + e.getMessage())
+                            .build());
+        }
+    }
 }

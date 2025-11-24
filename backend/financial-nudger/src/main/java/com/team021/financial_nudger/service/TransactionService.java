@@ -3,19 +3,17 @@ package com.team021.financial_nudger.service;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.team021.financial_nudger.dto.ExtractedFinancialData;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.team021.financial_nudger.domain.Transaction;
 import com.team021.financial_nudger.domain.Transaction.TransactionType;
+import com.team021.financial_nudger.dto.ExtractedFinancialData;
+import com.team021.financial_nudger.dto.ExtractedTransactionDto;
 import com.team021.financial_nudger.dto.ManualTransactionRequest;
 import com.team021.financial_nudger.repository.TransactionRepository;
-import com.team021.financial_nudger.repository.UserRepository;
 import com.team021.financial_nudger.service.llm.CategorizationService;
 import com.team021.financial_nudger.service.llm.ClassificationResult;
-
-import com.team021.financial_nudger.dto.ExtractedTransactionDto;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TransactionService {
@@ -23,17 +21,14 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final CategoryService categoryService;
     private final CategorizationService categorizationService;
-    private final UserRepository userRepository;
   
     public TransactionService(TransactionRepository transactionRepository,
                               CategoryService categoryService,
-                              CategorizationService categorizationService,
-                              UserRepository userRepository) 
+                              CategorizationService categorizationService) 
     { 
         this.transactionRepository = transactionRepository;
         this.categoryService = categoryService;
         this.categorizationService = categorizationService;
-        this.userRepository = userRepository;
     }
 
     /**
@@ -46,6 +41,7 @@ public class TransactionService {
 
         // 2. Call LLM for categorization
         ClassificationResult result = categorizationService.classifyExpense(
+                request.userId(),
                 request.note(),
                 validCategories
         );
@@ -115,23 +111,18 @@ public class TransactionService {
 
         List<String> errors = new ArrayList<>();
 
-        // Assuming your CategoryService provides a list of category names for the LLM
-        // If your categorization service is mock, this might be optional for now.
-        // List<String> validCategories = categoryService.getAvailableCategoryNames(userId);
+        List<String> validCategories = categoryService.getAvailableCategoryNames(userId);
 
         for (ExtractedTransactionDto dto : extractedTransactions) {
             try {
-                // 1. Call LLM Categorization Service (Use your actual service)
-                // For now, let's assume a mock category is returned.
-                // Replace this with your actual call to categorizationService
+                ClassificationResult result = categorizationService.classifyExpense(
+                        userId,
+                        buildPdfTransactionPrompt(dto),
+                        validCategories
+                );
 
-                String classifiedCategoryName = "Uncategorized"; // Placeholder
-                double confidenceScore = 0.0; // Placeholder
+                Integer categoryId = categoryService.getCategoryByName(result.classifiedCategoryName(), userId).getCategoryId();
 
-                // 2. Map to Category ID (Requires your CategoryService)
-                // Integer categoryId = categoryService.getCategoryByName(classifiedCategoryName, userId).getCategoryId();
-
-                // 3. Create and save the final Transaction entity
                 Transaction transaction = new Transaction();
                 transaction.setUserId(userId);
                 transaction.setDate(dto.date());
@@ -142,11 +133,12 @@ public class TransactionService {
 
                 transaction.setDescription(dto.description());
                 transaction.setFileId(fileId);
-                // transaction.setCategoryId(categoryId);
-                // transaction.setCategoryConfidence(confidenceScore);
+                transaction.setCategoryId(categoryId);
+                transaction.setCategoryConfidence(result.confidenceScore());
                 transaction.setAiCategorized(true);
+                transaction.setUserCategorized(false);
 
-                // transactionRepository.save(transaction); // Uncomment when ready
+                transactionRepository.save(transaction);
 
             } catch (Exception e) {
                 // Collect errors
@@ -158,4 +150,15 @@ public class TransactionService {
         return errors;
     }
 
+    private String buildPdfTransactionPrompt(ExtractedTransactionDto dto) {
+        return """
+                Description: %s
+                Amount: %s
+                Type: %s
+                """.formatted(
+                dto.description(),
+                dto.amount(),
+                dto.type().name()
+        );
+    }
 }

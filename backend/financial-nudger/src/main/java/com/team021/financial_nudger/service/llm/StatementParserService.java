@@ -1,51 +1,77 @@
 package com.team021.financial_nudger.service.llm;
 
-import com.team021.financial_nudger.dto.ExtractedTransactionDto;
-import com.team021.financial_nudger.dto.ExtractedTransactionDto.TransactionType;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team021.financial_nudger.dto.ExtractedTransactionDto;
+import com.team021.financial_nudger.dto.ExtractedTransactionDto.TransactionType;
+
 @Service
 public class StatementParserService {
 
-    // 🚨 IMPORTANT: This is a temporary MOCK implementation.
-    // In Phase 5, this method will contain the actual Gemini API call
-    // with instructions to return a List<ExtractedTransactionDto> in JSON format.
+    private final GeminiClient geminiClient;
+    private final ObjectMapper objectMapper;
+    private final int maxStatementChars;
+
+    public StatementParserService(GeminiClient geminiClient,
+                                  ObjectMapper objectMapper,
+                                  @Value("${gemini.max-statement-chars:6000}") int maxStatementChars) {
+        this.geminiClient = geminiClient;
+        this.objectMapper = objectMapper;
+        this.maxStatementChars = maxStatementChars;
+    }
 
     /**
-     * MOCK: Simulates calling Gemini to extract structured transactions from raw PDF text.
-     * @param rawPdfText The raw text extracted by PDFBox.
-     * @param userId The ID of the user (can be used for contextual prompting later).
-     * @return A list of clean, structured transaction DTOs.
+     * Calls Gemini to transform raw statement text into clean transaction DTOs.
      */
     public List<ExtractedTransactionDto> extractTransactions(String rawPdfText, Integer userId) {
+        String truncatedText = truncate(rawPdfText);
+        String instructions = """
+                You are parsing a bank statement for user %d.
+                Read the provided statement text and extract each transaction as JSON array items with keys:
+                date (YYYY-MM-DD), amount (number), description (string), type (DEBIT or CREDIT).
+                Only include rows that clearly represent monetary movements.
+                """.formatted(userId);
 
-        // ⚠️ In a real implementation, this is where the Gemini API call goes.
-        // For demonstration, we return a hardcoded list.
-        List<ExtractedTransactionDto> transactions = new ArrayList<>();
+        List<GeminiPart> parts = List.of(GeminiPart.text(truncatedText));
+        String jsonResponse = geminiClient.generateJson(instructions, parts);
+        return parseTransactions(jsonResponse);
+    }
 
-        // Mocking the first two transactions from your example data:
-        // 1. UPI OUT: 59.00
-        transactions.add(new ExtractedTransactionDto(
-                LocalDate.of(2025, 10, 4),
-                new BigDecimal("59.00"),
-                "UPI OUT VENDOLITE INDIA PAYMENT",
-                TransactionType.DEBIT
-        ));
+    private List<ExtractedTransactionDto> parseTransactions(String jsonResponse) {
+        List<ExtractedTransactionDto> results = new ArrayList<>();
+        try {
+            JsonNode node = objectMapper.readTree(jsonResponse);
+            if (!node.isArray()) {
+                throw new GeminiClientException("Gemini statement response is not an array");
+            }
+            for (JsonNode txnNode : node) {
+                LocalDate date = LocalDate.parse(txnNode.path("date").asText());
+                BigDecimal amount = new BigDecimal(txnNode.path("amount").asText());
+                String description = txnNode.path("description").asText();
+                TransactionType type = TransactionType.valueOf(txnNode.path("type").asText("DEBIT").toUpperCase());
+                results.add(new ExtractedTransactionDto(date, amount, description, type));
+            }
+            return results;
+        } catch (Exception ex) {
+            throw new GeminiClientException("Failed to parse Gemini statement response: " + jsonResponse, ex);
+        }
+    }
 
-        // 2. UPI IN: 60.00
-        transactions.add(new ExtractedTransactionDto(
-                LocalDate.of(2025, 10, 4),
-                new BigDecimal("60.00"),
-                "UPI IN sasi RECEIPT",
-                TransactionType.CREDIT
-        ));
-
-        // Note: You must ensure your TransactionType enum exists in your domain.
-        return transactions;
+    private String truncate(String rawText) {
+        if (rawText == null) {
+            return "";
+        }
+        if (rawText.length() <= maxStatementChars) {
+            return rawText;
+        }
+        return rawText.substring(0, maxStatementChars);
     }
 }

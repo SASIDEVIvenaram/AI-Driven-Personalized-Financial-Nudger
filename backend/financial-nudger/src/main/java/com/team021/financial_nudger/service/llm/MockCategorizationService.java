@@ -1,16 +1,16 @@
 package com.team021.financial_nudger.service.llm;
 
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
 import java.util.List;
+
+import org.springframework.stereotype.Service;
 
 @Service
 public class MockCategorizationService implements CategorizationService {
 
     // Simple mock logic: checks keywords and returns a hardcoded confidence.
     @Override
-    public ClassificationResult classifyExpense(String rawText, List<String> availableCategories) {
+    public ClassificationResult classifyExpense(Integer userId, String rawText, List<String> availableCategories) {
 
         String category = "Miscellaneous";
         BigDecimal confidence = new BigDecimal("0.5000");
