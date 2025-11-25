@@ -1,17 +1,18 @@
 package com.team021.financial_nudger.service.llm;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.team021.financial_nudger.repository.TransactionCategoryFeedbackRepository;
-import com.team021.financial_nudger.service.CategoryService;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.stream.Collectors;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.team021.financial_nudger.repository.TransactionCategoryFeedbackRepository;
+import com.team021.financial_nudger.service.CategoryService;
 
 @Service
 @Primary
@@ -77,5 +78,9 @@ public class GeminiCategorizationService implements CategorizationService {
                 })
                 .collect(Collectors.joining("; "));
     }
+    public List<String> getAvailableCategoriesForUser(Integer userId) {
+        return categoryService.getAvailableCategoryNames(userId);
+    }
+    
 }
 
