@@ -1,5 +1,6 @@
 package com.team021.financial_nudger.service;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +18,8 @@ import com.team021.financial_nudger.repository.IngestedFileRepository;
 import com.team021.financial_nudger.service.llm.LLMExtractionService;
 import com.team021.financial_nudger.service.llm.StatementParserService;
 import com.team021.financial_nudger.service.pdf.PdfExtractionService;
+
+import net.sourceforge.tess4j.Tesseract;
 
 @Service
 public class FileUploadService {
@@ -65,7 +68,6 @@ public class FileUploadService {
             List<String> validCategories = categoryService.getAvailableCategoryNames(userId);
             if (validCategories == null) validCategories = new ArrayList<>();
 
-            // ✅ Updated to handle multi-item receipts
             List<ExtractedFinancialData> extractedDataList =
                     llmExtractionService.extractAndCategorizeReceipt(file, userId, validCategories);
 
@@ -78,11 +80,8 @@ public class FileUploadService {
 
             for (ExtractedFinancialData data : extractedDataList) {
                 List<String> errors = transactionService.saveReceiptTransaction(userId, fileId, data);
-                if (errors.isEmpty()) {
-                    successCount++;
-                } else {
-                    allErrors.addAll(errors);
-                }
+                if (errors.isEmpty()) successCount++;
+                else allErrors.addAll(errors);
             }
 
             ingestedFile.setUploadStatus(IngestedFile.UploadStatus.COMPLETED);
@@ -122,7 +121,30 @@ public class FileUploadService {
         Integer fileId = ingestedFile.getFileId();
 
         try {
+            // 🔹 Step 1: Try normal text extraction
             String rawText = pdfExtractionService.extractTextFromPdf(file);
+            System.out.println("📄 Extracted PDF text length: " + (rawText != null ? rawText.length() : 0));
+
+            // 🔹 Step 2: If empty, fallback to OCR (for scanned PDFs)
+            if (rawText == null || rawText.isBlank()) {
+                System.out.println("⚠️ PDF text is empty. Using OCR fallback...");
+                File tempFile = File.createTempFile("ocr_", ".pdf");
+                file.transferTo(tempFile);
+
+                Tesseract tesseract = new Tesseract();
+                tesseract.setDatapath("C:\\Users\\91944\\AppData\\Local\\Programs\\Tesseract-OCR\\tessdata"); // path to tessdata folder
+                tesseract.setLanguage("eng");
+                rawText = tesseract.doOCR(tempFile);
+
+                tempFile.deleteOnExit();
+                System.out.println("🧠 OCR text extracted length: " + (rawText != null ? rawText.length() : 0));
+            }
+
+            if (rawText == null || rawText.isBlank()) {
+                throw new FileProcessingException("Bank statement text is empty even after OCR.");
+            }
+
+            // 🔹 Step 3: Parse with Gemini
             List<ExtractedTransactionDto> extractedTransactions =
                     statementParserService.extractTransactions(rawText, userId);
 
@@ -147,7 +169,7 @@ public class FileUploadService {
         } catch (IOException e) {
             ingestedFile.setUploadStatus(IngestedFile.UploadStatus.FAILED);
             ingestedFileRepository.save(ingestedFile);
-            throw new FileProcessingException("PDF extraction failed.", e);
+            throw new FileProcessingException("PDF extraction failed: " + e.getMessage(), e);
         } catch (Exception e) {
             ingestedFile.setUploadStatus(IngestedFile.UploadStatus.FAILED);
             ingestedFileRepository.save(ingestedFile);

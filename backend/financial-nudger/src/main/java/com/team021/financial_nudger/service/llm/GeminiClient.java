@@ -17,19 +17,29 @@ public class GeminiClient {
     private final Duration timeout;
 
     public GeminiClient(
-            WebClient.Builder builder,
-            @Value("${gemini.api.key:}") String apiKey,
-            @Value("${gemini.model:gemini-1.5-flash}") String model,
-            @Value("${gemini.timeout-seconds:60}") long timeoutSeconds
+        WebClient.Builder builder,
+        @Value("${gemini.api.key:}") String apiKey,
+        @Value("${gemini.model:gemini-2.0-flash}") String model,
+        @Value("${gemini.timeout-seconds:90}") long timeoutSeconds // ⏳ Increased default timeout to 90s
     ) {
         this.webClient = builder
-            .baseUrl("https://generativelanguage.googleapis.com/v1") // <-- changed from v1beta
+            .baseUrl("https://generativelanguage.googleapis.com/v1beta")
             .build();
 
         this.apiKey = apiKey;
         this.model = model;
-        long safeTimeout = timeoutSeconds < 5 ? 5 : timeoutSeconds;
+        long safeTimeout = Math.max(30, timeoutSeconds);
         this.timeout = Duration.ofSeconds(safeTimeout);
+
+        // ✅ Debug info
+        if (apiKey == null || apiKey.isBlank()) {
+            System.out.println("⚠️ Gemini API key is NOT loaded from environment or properties!");
+        } else {
+            System.out.println("✅ Gemini API key loaded successfully (length=" + apiKey.length() + ")");
+        }
+
+        System.out.println("🧠 Gemini model in use: " + model);
+        System.out.println("⏱️ Timeout configured: " + safeTimeout + " seconds");
     }
 
     public String generateJson(String instructions, java.util.List<GeminiPart> parts) {
@@ -42,6 +52,9 @@ public class GeminiClient {
     private GeminiResponse execute(GeminiRequest request) {
         ensureApiKeyConfigured();
         try {
+            String url = "/models/" + model + ":generateContent";
+            System.out.println("🔗 Calling Gemini API: " + url + " (model: " + model + ")");
+
             return webClient.post()
                     .uri(uriBuilder -> uriBuilder
                             .path("/models/{model}:generateContent")
@@ -54,9 +67,19 @@ public class GeminiClient {
                     .block(timeout);
         } catch (WebClientResponseException ex) {
             String reason = ex.getResponseBodyAsString();
-            throw new GeminiClientException("Gemini API error: " + reason, ex);
+            int statusCode = ex.getStatusCode().value();
+            String errorMsg = String.format("Gemini API error (HTTP %d): %s", statusCode, reason);
+            System.err.println("❌ " + errorMsg);
+            throw new GeminiClientException(errorMsg, ex);
         } catch (Exception ex) {
-            throw new GeminiClientException("Unexpected error while calling Gemini API", ex);
+            String errorMsg = String.format(
+                "Unexpected error while calling Gemini API: %s: %s",
+                ex.getClass().getSimpleName(),
+                ex.getMessage() != null ? ex.getMessage() : ex.toString()
+            );
+            System.err.println("❌ " + errorMsg);
+            ex.printStackTrace();
+            throw new GeminiClientException(errorMsg, ex);
         }
     }
 
@@ -66,4 +89,3 @@ public class GeminiClient {
         }
     }
 }
-

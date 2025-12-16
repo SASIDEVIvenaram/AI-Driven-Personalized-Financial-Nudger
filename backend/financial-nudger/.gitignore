@@ -1,10 +1,15 @@
-HELP.md
+# ------------------------------
+# Maven & Build Artifacts
+# ------------------------------
 target/
-.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-### STS ###
+# ------------------------------
+# IDE / Editor Configs
+# ------------------------------
+# STS / Eclipse
 .apt_generated
 .classpath
 .factorypath
@@ -13,13 +18,13 @@ target/
 .springBeans
 .sts4-cache
 
-### IntelliJ IDEA ###
-.idea
+# IntelliJ IDEA
+.idea/
 *.iws
 *.iml
 *.ipr
 
-### NetBeans ###
+# NetBeans
 /nbproject/private/
 /nbbuild/
 /dist/
@@ -29,5 +34,25 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-### VS Code ###
+# VS Code
 .vscode/
+
+# ------------------------------
+# Logs and Temp Files
+# ------------------------------
+*.log
+*.tmp
+*.bak
+*.swp
+
+# ------------------------------
+# Sensitive Config / Environment
+# ------------------------------
+src/main/resources/application.properties
+.env
+
+# ------------------------------
+# System Files
+# ------------------------------
+.DS_Store
+Thumbs.db
