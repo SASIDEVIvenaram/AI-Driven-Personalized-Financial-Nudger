@@ -117,7 +117,7 @@ public class LLMExtractionService {
             }
 
             return dataList;
-        } catch (Exception ex) {
+        } catch (java.io.IOException ex) {
             throw new GeminiClientException("Unable to parse Gemini receipt response: " + jsonResponse, ex);
         }
     }

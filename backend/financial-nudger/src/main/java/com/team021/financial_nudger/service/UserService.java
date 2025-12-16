@@ -43,7 +43,8 @@ public class UserService {
 
   @Transactional(readOnly = true)
   public UserResponse getById(Integer id) {
-    User user = userRepository.findById(id)
+    Integer safeId = java.util.Objects.requireNonNull(id);
+    User user = userRepository.findById(safeId)
             .orElseThrow(() -> new NotFoundException("User not found: " + id));
     return toResponse(user);
   }
@@ -55,7 +56,8 @@ public class UserService {
 
   @Transactional
   public UserResponse update(Integer id, UserCreateRequest req) {
-    User user = userRepository.findById(id)
+    Integer safeId = java.util.Objects.requireNonNull(id);
+    User user = userRepository.findById(safeId)
             .orElseThrow(() -> new NotFoundException("User not found: " + id));
     user.setFirstName(req.getFirstName());
     user.setLastName(req.getLastName());
@@ -71,8 +73,9 @@ public class UserService {
 
   @Transactional
   public void delete(Integer id) {
-    if (!userRepository.existsById(id)) throw new NotFoundException("User not found: " + id);
-    userRepository.deleteById(id);
+    Integer safeId = java.util.Objects.requireNonNull(id);
+    if (!userRepository.existsById(safeId)) throw new NotFoundException("User not found: " + id);
+    userRepository.deleteById(safeId);
   }
 
   private UserResponse toResponse(User u) {

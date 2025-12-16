@@ -1,12 +1,15 @@
 package com.team021.financial_nudger.config; // <-- NEW PACKAGE LOCATION
 
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.stereotype.Component;
+
 import com.team021.financial_nudger.domain.Category;
 import com.team021.financial_nudger.domain.Category.CategoryType;
 import com.team021.financial_nudger.repository.CategoryRepository;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.stereotype.Component;
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Component
 public class CategoryInitializer implements CommandLineRunner {
@@ -18,35 +21,31 @@ public class CategoryInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        // Only initialize if no categories exist (to prevent duplicates on restart)
-        if (categoryRepository.count() == 0) {
+        // Ensure required system categories exist. If already present, skip; if missing, insert.
+        List<String> required = List.of(
+            "Food_Dining",   // matches model label
+            "Groceries",
+            "Transfers",
+            "Transport",
+            "Utilities",
+            "Miscellaneous"  // fallback bucket
+        );
 
-            // Define your required categories (only EXPENSE as per your statement)
-            List<String> expenseCategories = List.of(
-                    "Groceries",
-                    "Food",
-                    "Shopping",
-                    "Entertainment",
-                    "Transportation",
-                    "Bills & Utilities",
-                    "Health & Fitness",
-                    "Miscellaneous" // Essential fallback category for the LLM
-            );
+        List<Category> missing = required.stream()
+                .filter(name -> !categoryRepository.existsByCategoryNameAndIsUserDefined(name, false))
+                .map(name -> {
+                    Category c = new Category();
+                    c.setCategoryName(name);
+                    c.setCategoryType(CategoryType.EXPENSE);
+                    c.setIsUserDefined(false);
+                    c.setUserId(null);
+                    return c;
+                })
+                .collect(Collectors.toList());
 
-            // Save the categories to the database
-            List<Category> categories = expenseCategories.stream()
-                    .map(name -> {
-                        Category c = new Category();
-                        c.setCategoryName(name);
-                        c.setCategoryType(CategoryType.EXPENSE);
-                        c.setIsUserDefined(false); // Mark as system/standard category
-                        c.setUserId(null); // System categories don't belong to a user
-                        return c;
-                    })
-                    .collect(Collectors.toList());
-
-            categoryRepository.saveAll(categories);
-            System.out.println("✅ Initial system categories loaded: " + categories.size());
+        if (!missing.isEmpty()) {
+            categoryRepository.saveAll(Objects.requireNonNull(missing));
+            System.out.println("✅ System categories ensured/added: " + missing.size());
         }
     }
 

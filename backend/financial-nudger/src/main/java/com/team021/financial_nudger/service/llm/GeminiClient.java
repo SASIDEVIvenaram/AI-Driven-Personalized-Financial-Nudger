@@ -1,6 +1,7 @@
 package com.team021.financial_nudger.service.llm;
 
 import java.time.Duration;
+import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -55,13 +56,15 @@ public class GeminiClient {
             String url = "/models/" + model + ":generateContent";
             System.out.println("🔗 Calling Gemini API: " + url + " (model: " + model + ")");
 
-            return webClient.post()
+                final MediaType jsonType = Objects.requireNonNull(MediaType.APPLICATION_JSON);
+
+                return webClient.post()
                     .uri(uriBuilder -> uriBuilder
                             .path("/models/{model}:generateContent")
                             .queryParam("key", apiKey)
                             .build(model))
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .bodyValue(request)
+                    .contentType(jsonType)
+                    .bodyValue(Objects.requireNonNull(request))
                     .retrieve()
                     .bodyToMono(GeminiResponse.class)
                     .block(timeout);
@@ -78,7 +81,6 @@ public class GeminiClient {
                 ex.getMessage() != null ? ex.getMessage() : ex.toString()
             );
             System.err.println("❌ " + errorMsg);
-            ex.printStackTrace();
             throw new GeminiClientException(errorMsg, ex);
         }
     }

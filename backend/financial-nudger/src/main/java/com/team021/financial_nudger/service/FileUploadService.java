@@ -1,9 +1,9 @@
 package com.team021.financial_nudger.service;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,15 +11,14 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.team021.financial_nudger.domain.IngestedFile;
 import com.team021.financial_nudger.dto.ExtractedFinancialData;
-import com.team021.financial_nudger.dto.ExtractedTransactionDto;
 import com.team021.financial_nudger.dto.FileUploadResponse;
 import com.team021.financial_nudger.exception.FileProcessingException;
 import com.team021.financial_nudger.repository.IngestedFileRepository;
 import com.team021.financial_nudger.service.llm.LLMExtractionService;
-import com.team021.financial_nudger.service.llm.StatementParserService;
 import com.team021.financial_nudger.service.pdf.PdfExtractionService;
 
 import net.sourceforge.tess4j.Tesseract;
+import net.sourceforge.tess4j.TesseractException;
 
 @Service
 public class FileUploadService {
@@ -27,20 +26,18 @@ public class FileUploadService {
     private final IngestedFileRepository ingestedFileRepository;
     private final TransactionService transactionService;
     private final PdfExtractionService pdfExtractionService;
-    private final StatementParserService statementParserService;
+
     private final CategoryService categoryService;
     private final LLMExtractionService llmExtractionService;
 
     public FileUploadService(IngestedFileRepository ingestedFileRepository,
                              TransactionService transactionService,
                              PdfExtractionService pdfExtractionService,
-                             StatementParserService statementParserService,
                              CategoryService categoryService,
                              LLMExtractionService llmExtractionService) {
         this.ingestedFileRepository = ingestedFileRepository;
         this.transactionService = transactionService;
         this.pdfExtractionService = pdfExtractionService;
-        this.statementParserService = statementParserService;
         this.categoryService = categoryService;
         this.llmExtractionService = llmExtractionService;
     }
@@ -100,16 +97,16 @@ public class FileUploadService {
                     .processedAt(java.time.Instant.now())
                     .build();
 
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             ingestedFile.setUploadStatus(IngestedFile.UploadStatus.FAILED);
             ingestedFile.setErrorMessage(e.getMessage());
             ingestedFileRepository.save(ingestedFile);
             throw new FileProcessingException("Receipt processing failed: " + e.getMessage(), e);
         }
     }
-
     @Transactional
     public FileUploadResponse processPdfFile(MultipartFile file, Integer userId) {
+
         IngestedFile ingestedFile = new IngestedFile();
         ingestedFile.setUserId(userId);
         ingestedFile.setFileName(file.getOriginalFilename());
@@ -118,62 +115,82 @@ public class FileUploadService {
         ingestedFile.setFileType(IngestedFile.FileType.STATEMENT);
         ingestedFile.setUploadStatus(IngestedFile.UploadStatus.PROCESSING);
         ingestedFile = ingestedFileRepository.save(ingestedFile);
+
         Integer fileId = ingestedFile.getFileId();
 
         try {
-            // 🔹 Step 1: Try normal text extraction
+            // 1️⃣ Extract text using PDFBox
             String rawText = pdfExtractionService.extractTextFromPdf(file);
             System.out.println("📄 Extracted PDF text length: " + (rawText != null ? rawText.length() : 0));
 
-            // 🔹 Step 2: If empty, fallback to OCR (for scanned PDFs)
+            // 2️⃣ OCR fallback
             if (rawText == null || rawText.isBlank()) {
-                System.out.println("⚠️ PDF text is empty. Using OCR fallback...");
-                File tempFile = File.createTempFile("ocr_", ".pdf");
-                file.transferTo(tempFile);
+                System.out.println("⚠️ PDF text empty, using OCR...");
+                File tempFile = null;
+                try {
+                    tempFile = File.createTempFile("ocr_", ".pdf");
+                    file.transferTo(Objects.requireNonNull(tempFile));
 
-                Tesseract tesseract = new Tesseract();
-                tesseract.setDatapath("C:\\Users\\91944\\AppData\\Local\\Programs\\Tesseract-OCR\\tessdata"); // path to tessdata folder
-                tesseract.setLanguage("eng");
-                rawText = tesseract.doOCR(tempFile);
+                    Tesseract tesseract = new Tesseract();
+                    tesseract.setDatapath("C:\\Users\\91944\\AppData\\Local\\Programs\\Tesseract-OCR\\tessdata");
+                    tesseract.setLanguage("eng");
 
-                tempFile.deleteOnExit();
-                System.out.println("🧠 OCR text extracted length: " + (rawText != null ? rawText.length() : 0));
+                    rawText = tesseract.doOCR(tempFile);
+                } catch (java.io.IOException | TesseractException ocrEx) {
+                    throw new FileProcessingException("OCR processing failed: " + ocrEx.getMessage(), ocrEx);
+                } finally {
+                    if (tempFile != null) {
+                        tempFile.deleteOnExit();
+                    }
+                }
             }
 
             if (rawText == null || rawText.isBlank()) {
-                throw new FileProcessingException("Bank statement text is empty even after OCR.");
+                throw new FileProcessingException("Statement text empty even after OCR");
             }
 
-            // 🔹 Step 3: Parse with Gemini
-            List<ExtractedTransactionDto> extractedTransactions =
-                    statementParserService.extractTransactions(rawText, userId);
+            // 3️⃣ Split into lines (simple & reliable)
+            String[] lines = rawText.split("\\r?\\n");
 
-            List<String> errors = transactionService.savePdfTransactions(userId, fileId, extractedTransactions);
+            int success = 0;
+            List<String> errors = new ArrayList<>();
+
+            for (String line : lines) {
+                if (line.length() < 10) continue; // skip noise
+
+                try {
+                    transactionService.saveTransactionFromStatementLine(
+                            userId,
+                            fileId,
+                            line
+                    );
+                    success++;
+                } catch (Exception ex) {
+                    errors.add("Failed line: " + line);
+                }
+            }
 
             ingestedFile.setUploadStatus(IngestedFile.UploadStatus.COMPLETED);
             ingestedFileRepository.save(ingestedFile);
 
             return FileUploadResponse.builder()
                     .success(true)
-                    .message("PDF file processed successfully.")
+                    .message("PDF processed successfully using offline ML")
                     .fileId(fileId)
                     .fileName(file.getOriginalFilename())
-                    .fileSize(file.getSize())
-                    .processedRows(extractedTransactions.size())
-                    .successfulTransactions(extractedTransactions.size() - errors.size())
+                    .processedRows(lines.length)
+                    .successfulTransactions(success)
                     .failedTransactions(errors.size())
                     .errors(errors)
                     .processedAt(java.time.Instant.now())
                     .build();
 
-        } catch (IOException e) {
+        } catch (RuntimeException e) {
             ingestedFile.setUploadStatus(IngestedFile.UploadStatus.FAILED);
+            ingestedFile.setErrorMessage(e.getMessage());
             ingestedFileRepository.save(ingestedFile);
-            throw new FileProcessingException("PDF extraction failed: " + e.getMessage(), e);
-        } catch (Exception e) {
-            ingestedFile.setUploadStatus(IngestedFile.UploadStatus.FAILED);
-            ingestedFileRepository.save(ingestedFile);
-            throw new FileProcessingException("Transaction parsing/saving failed: " + e.getMessage(), e);
+            throw new FileProcessingException("PDF processing failed: " + e.getMessage(), e);
         }
     }
+
 }
