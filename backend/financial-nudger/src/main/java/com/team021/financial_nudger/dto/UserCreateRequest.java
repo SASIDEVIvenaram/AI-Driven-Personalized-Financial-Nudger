@@ -24,5 +24,6 @@ public class UserCreateRequest {
   private String lastName;
 
   @Size(max = 3)
+  @Builder.Default
   private String currencyPreference = "INR";
 }

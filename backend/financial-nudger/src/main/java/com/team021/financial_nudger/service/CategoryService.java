@@ -60,6 +60,23 @@ public class CategoryService {
         // Assuming unique names for simplicity and better data integrity.
     }
 
+    /**
+     * Fetches a user's category by name or creates it if missing.
+     * Defaults type to EXPENSE.
+     */
+    public Category getOrCreateUserCategoryByName(String categoryName, Integer userId) {
+        return categoryRepository.findByCategoryNameAndUserId(categoryName, userId)
+                .orElseGet(() -> {
+                    System.out.println("✨ Auto-creating category '" + categoryName + "' for user " + userId);
+                    Category c = new Category();
+                    c.setCategoryName(categoryName);
+                    c.setCategoryType(Category.CategoryType.EXPENSE);
+                    c.setIsUserDefined(true);
+                    c.setUserId(userId);
+                    return categoryRepository.save(c);
+                });
+    }
+
     // ------------------------------------------
     // 2. CRUD OPERATIONS
     // ------------------------------------------
@@ -88,10 +105,10 @@ public class CategoryService {
     }
 
     /**
-     * Fetches all categories (system and user's custom) available to a user.
+     * Fetches only the user's own categories (no global/system categories).
      */
     public List<CategoryResponse> getCategoriesForUser(Integer userId) {
-        return categoryRepository.findAvailableCategoriesForUser(userId).stream()
+        return categoryRepository.findByUserIdAndIsUserDefined(userId, true).stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }

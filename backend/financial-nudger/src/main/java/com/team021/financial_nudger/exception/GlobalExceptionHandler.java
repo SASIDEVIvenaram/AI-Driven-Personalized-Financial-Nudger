@@ -61,12 +61,5 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(body);
     }
 
-    @ExceptionHandler(com.team021.financial_nudger.service.llm.GeminiClientException.class)
-    public ResponseEntity<Map<String, Object>> handleGeminiErrors(RuntimeException ex) {
-        Map<String, Object> body = Map.of(
-                "error", "GEMINI_FAILURE",
-                "message", ex.getMessage()
-        );
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(body);
-    }
+    // Removed handler for GeminiClientException (class not present). If needed, add a concrete exception from LLM layer.
 }

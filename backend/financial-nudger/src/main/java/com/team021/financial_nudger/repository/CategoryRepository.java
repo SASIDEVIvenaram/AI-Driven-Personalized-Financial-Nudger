@@ -32,4 +32,6 @@ public interface CategoryRepository extends JpaRepository<Category, Integer> {
     boolean existsByCategoryNameAndIsUserDefined(String categoryName, Boolean isUserDefined);
 
     Optional<Category> findByCategoryName(String categoryName);
+
+    Optional<Category> findByCategoryNameAndUserId(String categoryName, Integer userId);
 }

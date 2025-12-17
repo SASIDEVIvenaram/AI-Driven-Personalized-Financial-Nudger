@@ -1,6 +1,7 @@
 package com.team021.financial_nudger.controller;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.springframework.http.ResponseEntity;
@@ -29,25 +30,22 @@ public class MlDataExportController {
      * Returns CSV-like data: description, corrected_category
      */
     @GetMapping("/export/feedback")
-    public ResponseEntity<List<FeedbackExportDto>> exportFeedbackData() {
+        public ResponseEntity<List<FeedbackExportDto>> exportFeedbackData() {
         var feedbacks = feedbackRepository.findAll();
-        
+
         var exportData = feedbacks.stream()
-                .map(feedback -> {
-                    var transaction = transactionRepository.findById(feedback.getTransactionId()).orElse(null);
-                    if (transaction == null) return null;
-                    
-                    return new FeedbackExportDto(
-                            transaction.getDescription(),
-                            feedback.getNewCategoryId(),
-                            transaction.getMerchantName()
-                    );
-                })
-                .filter(dto -> dto != null)
-                .collect(Collectors.toList());
-        
+            .flatMap(feedback -> transactionRepository
+                .findById(Objects.requireNonNull(feedback.getTransactionId()))
+                .stream()
+                .map(transaction -> new FeedbackExportDto(
+                    transaction.getDescription(),
+                    feedback.getNewCategoryId(),
+                    transaction.getMerchantName()
+                )))
+            .collect(Collectors.toList());
+
         return ResponseEntity.ok(exportData);
-    }
+        }
 
     public record FeedbackExportDto(
             String description,
